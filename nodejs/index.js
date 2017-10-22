@@ -434,7 +434,10 @@ function postProfile(req, res) {
         }
       }
       if (avatarName && avatarData) {
-        p = p.then(() => pool.query('INSERT INTO image (name, data) VALUES (?, _binary ?)', [avatarName, avatarData]))
+        // iconの移動
+        fs.rename(avatar_icon.path, `${ICONS_FOLDER}/${avatarName}`);
+
+        // p = p.then(() => pool.query('INSERT INTO image (name, data) VALUES (?, _binary ?)', [avatarName, avatarData]))
         p = p.then(() => pool.query('UPDATE user SET avatar_icon = ? WHERE id = ?', [avatarName, userId]))
       }
 
@@ -460,20 +463,20 @@ function ext2mime(ext) {
   }
 }
 
-app.get('/icons/:fileName', getIcon)
-function getIcon(req, res) {
-  const { fileName } = req.params
-  return pool.query('SELECT * FROM image WHERE name = ?', [fileName])
-    .then(([row]) => {
-      const ext = path.extname(fileName) || ''
-      const mime = ext2mime(ext)
-      if (!row || !mime) {
-        res.status(404).end()
-        return
-      }
-      res.header({ 'Content-Type': mime }).end(row.data)
-    })
-}
+// app.get('/icons/:fileName', getIcon)
+// function getIcon(req, res) {
+//   const { fileName } = req.params
+//   return pool.query('SELECT * FROM image WHERE name = ?', [fileName])
+//     .then(([row]) => {
+//       const ext = path.extname(fileName) || ''
+//       const mime = ext2mime(ext)
+//       if (!row || !mime) {
+//         res.status(404).end()
+//         return
+//       }
+//       res.header({ 'Content-Type': mime }).end(row.data)
+//     })
+// }
 
 app.listen(PORT, () => {
   console.log('Example app listening on port ' + PORT + '!')
