@@ -424,8 +424,6 @@ function postProfile(req, res) {
             return
           }
 
-          console.log(avatar_icon);
-
           const data = fs.readFileSync(avatar_icon.path)
           const shasum = crypto.createHash('sha1')
           shasum.update(data)
