@@ -286,9 +286,9 @@ function fetchUnread(req, res) {
         p = p.then(() => pool.query('SELECT * FROM haveread WHERE user_id = ? AND channel_id = ?', [userId, channelId]))
           .then(([row]) => {
             if (row) {
-              return pool.query('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ? AND ? < id', [channelId, row.message_id])
+              return pool.query('SELECT COUNT(id) as cnt FROM message WHERE channel_id = ? AND ? < id', [channelId, row.message_id])
             } else {
-              return pool.query('SELECT COUNT(*) as cnt FROM message WHERE channel_id = ?', [channelId])
+              return pool.query('SELECT COUNT(id) as cnt FROM message WHERE channel_id = ?', [channelId])
             }
           })
           .then(([row3]) => {
