@@ -8,6 +8,12 @@ const multer = require('multer')
 const mysql = require('mysql')
 const ECT = require('ect')
 const promisify = require('es6-promisify')
+const redis = require('redis');
+const bluebird = require('bluebird');
+
+bluebird.promisifyAll(redis.RedisClient.prototype);
+bluebird.promisifyAll(redis.Multi.prototype);
+const cache = redis.createClient();
 
 const STATIC_FOLDER = path.join(__dirname, '..', 'public')
 const ICONS_FOLDER = path.join(STATIC_FOLDER, 'icons')
@@ -45,6 +51,17 @@ const pool = mysql.createPool({
 })
 pool.query = promisify(pool.query, pool)
 
+const cacheCurrentUsers = () => {
+  pool.query('SELECT * FROM user')
+  .then((users) => {
+    for (let user of users) {
+      const userJson = JSON.stringify(user);
+      cache.set(`user-${user.id}`, userJson);
+      cache.set(`user-${user.name}`, userJson);
+    }
+  })
+}
+
 app.get('/initialize', getInitialize)
 function getInitialize(req, res) {
   return pool.query('DELETE FROM user WHERE id > 1000')
@@ -52,6 +69,7 @@ function getInitialize(req, res) {
     .then(() => pool.query('DELETE FROM channel WHERE id > 10'))
     .then(() => pool.query('DELETE FROM message WHERE id > 10000'))
     .then(() => pool.query('DELETE FROM haveread'))
+    .then(() => cacheCurrentUsers())
     .then(() => res.status(204).send(''))
 }
 
@@ -96,7 +114,17 @@ function register(conn, user, password) {
   return conn.query(`INSERT INTO user (name, salt, password, display_name, avatar_icon, created_at)
     VALUES (?, ?, ?, ?, ?, NOW())`,
     [user, salt, passDigest, user, 'default.png'])
-    .then(({ insertId }) => insertId)
+    .then(({ insertId }) => {
+      return pool.query('SELECT * FROM user WHERE name = ?', [user])
+      .then((users) => {
+        for (let user of users) {
+          const userJson = JSON.stringify(user);
+          cache.set(`user-${user.id}`, userJson);
+          cache.set(`user-${user.name}`, userJson);
+          return insertId;
+        }
+      })
+    })
 }
 
 app.get('/', getIndex)
@@ -232,7 +260,7 @@ function getMessage(req, res) {
   return pool.query('SELECT id FROM message WHERE id > ? AND channel_id = ? ORDER BY id DESC LIMIT 100', [last_message_id, channel_id])
     .then(rows => {
       const ids = `('${rows.map(row => row.id).join('\',\'')}')`;
-      return pool.query(`SELECT * FROM message WHERE id IN ${ids} ORDER BY id DESC`)
+      return pool.query(`SELECT * FROM message WHERE id IN ${ids} ORDER BY id`)
       .then(rows => {
         console.log();
         const response = []
@@ -241,9 +269,11 @@ function getMessage(req, res) {
           const r = {}
           r.id = row.id
           p = p.then(() => {
-            return pool.query('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', [row.user_id])
-              .then(([user]) => {
-                r.user = user
+            return cache.getAsync(`user-${row.user_id.toString()}`)
+            // return pool.query('SELECT name, display_name, avatar_icon FROM user WHERE id = ?', [row.user_id])
+              .then((user) => {
+                console.log(user);
+                r.user = JSON.parse(user);
                 r.date = formatDate(row.created_at)
                 r.content = row.content
                 response[i] = r
@@ -252,7 +282,7 @@ function getMessage(req, res) {
         })
 
         return p.then(() => {
-          response.reverse()
+          // response.reverse()
           const maxMessageId = rows.length ? Math.max(...rows.map(r => r.id)) : 0
           return pool.query(`INSERT INTO haveread (user_id, channel_id, message_id, updated_at, created_at)
             VALUES (?, ?, ?, NOW(), NOW())
@@ -450,6 +480,18 @@ function postProfile(req, res) {
       if (display_name) {
         p = p.then(() => pool.query('UPDATE user SET display_name = ? WHERE id = ?', [display_name, userId]))
       }
+
+      p = p.then(() => {
+        pool.query('SELECT * FROM user WHERE id = ?', [userId])
+        .then((users) => {
+          for (let user of users) {
+            const userJson = JSON.stringify(user);
+            cache.set(`user-${user.id}`, userJson);
+            cache.set(`user-${user.name}`, userJson);
+            return insertId;
+          }
+        })
+      });
 
       return p.then(() => res.redirect(303, '/'))
     })
