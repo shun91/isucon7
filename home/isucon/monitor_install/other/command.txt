@@ -1,0 +1,37 @@
+#各種必要なことについて念のためまとめ
+ssh-keygen -t rsa -b 4096 -C "enomototakuto@example.com"
+
+#####isucon user作成
+sudo adduser isucon
+sudo passwd isucon
+sudo gpasswd -a isucon sudo
+
+#####削除(-r: homeもdelete)
+sudo userdel isucon
+sudo userdel -r isucon
+
+#####測定用コマンド
+top
+htop
+dstat -t -a
+glances
+
+
+#####/etc/nginx/nginx.conf
+#####nginx conf, http{ 以下にかけばいい
+log_format ltsv "time:$time_local"
+                "\thost:$remote_addr"
+                "\tforwardedfor:$http_x_forwarded_for"
+                "\treq:$request"
+                "\tstatus:$status"
+                "\tmethod:$request_method"
+                "\turi:$request_uri"
+                "\tsize:$body_bytes_sent"
+                "\treferer:$http_referer"
+                "\tua:$http_user_agent"
+                "\treqtime:$request_time"
+                "\tcache:$upstream_http_x_cache"
+                "\truntime:$upstream_http_x_runtime"
+                "\tapptime:$upstream_response_time"
+                "\tvhost:$host";
+access_log /var/log/nginx/access.log ltsv;
